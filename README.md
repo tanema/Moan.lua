@@ -7,8 +7,6 @@ A simple messagebox system for LÖVE.
 Moan.new("Title", {"Hello world!", "It's me;--Möan.lua!"})
 ```
 
-![Preview of Moan.lua](preview.gif)
-
 ## Features
 - Multiple choices prompt
 - Typing effect + sounds
