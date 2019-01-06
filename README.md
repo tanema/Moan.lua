@@ -1,3 +1,5 @@
+**Notice: I did not create this library but it seems like the original creator has deleted their repo so this is a mirror**
+
 # Möan.lua
 A simple messagebox system for LÖVE.
 
