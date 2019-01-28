@@ -9,15 +9,29 @@
 
 local utf8 = require("utf8")
 local PATH = (...):match('^(.*[%./])[^%.%/]+$') or ''
-Moan = {
+
+-- Section of the text printed so far
+local printedText  = ""
+-- Timer to know when to print a new letter
+local typeTimer    = 0.01
+local typeTimerMax = 0.01
+local typing       = false
+-- Current position in the text
+local typePosition = 0
+-- Initialise timer for the indicator
+local indicatorTimer = 0
+local defaultFont = love.graphics.newFont()
+local allMessages = {} -- Create the message instance container
+
+local Moan = {
   indicatorCharacter = ">", -- Next message indicator
   optionCharacter = "- ",   -- Option select character
   indicatorDelay = 25,      -- Delay between each flash of indicator
   selectButton = "space",   -- Key that advances message
-  typeSpeed = 0.01,         -- Delay per character typed out
+  typeSpeed = typeTimer,         -- Delay per character typed out
   debug = false,            -- Display some debugging
 
-  history = {},             -- contains all previous messages + titles
+  font = defaultFont,
   currentMessage  = "",
   currentMsgInstance = 1,   -- The Moan.new function instance
   currentMsgKey= 1,         -- Key of value in the Moan.new messages
@@ -27,27 +41,7 @@ Moan = {
   _VERSION     = '0.2.8',
   _URL         = 'https://github.com/twentytwoo/Moan.lua',
   _DESCRIPTION = 'A simple messagebox system for LÖVE',
-
-  UI = {}
 }
-
--- Create the message instance container
-allMessages = {}
-
--- Section of the text printed so far
-local printedText  = ""
--- Timer to know when to print a new letter
-local typeTimer    = Moan.typeSpeed
-local typeTimerMax = Moan.typeSpeed
--- Current position in the text
-local typePosition = 0
--- Initialise timer for the indicator
-local indicatorTimer = 0
-local defaultFont = love.graphics.newFont()
-
-if Moan.font == nil then
-  Moan.font = defaultFont
-end
 
 function Moan.new(title, messages, config)
   if type(title) == "table" then
@@ -62,7 +56,7 @@ function Moan.new(title, messages, config)
   x = config.x
   y = config.y
   image = config.image or "nil"
-  options = config.options -- or {{"",function()end},{"",function()end},{"",function()end}}
+  options = config.options
   onstart = config.onstart or function() end
   oncomplete = config.oncomplete or function() end
   if image == nil or type(image) ~= "userdata" then
@@ -89,7 +83,6 @@ function Moan.new(title, messages, config)
     onstart=onstart,
     oncomplete=oncomplete
   }
-  Moan.history[#Moan.history+1] = {title, messages}
 
   -- Set the last message as "\n", an indicator to change currentMsgInstance
   allMessages[#allMessages].messages[#messages+1] = "\n"
@@ -111,9 +104,7 @@ end
 
 function Moan.update(dt)
   -- Check if the output string is equal to final string, else we must be still typing it
-  if printedText == Moan.currentMessage then
-    typing = false else typing = true
-  end
+  typing = printedText ~= Moan.currentMessage
 
   if Moan.showingMessage then
     -- Tiny timer for the message indicator
@@ -131,12 +122,14 @@ function Moan.update(dt)
     if allMessages[Moan.currentMsgInstance].messages[Moan.currentMsgKey+1] == "\n" and type(allMessages[Moan.currentMsgInstance].options) == "table" then
       Moan.showingOptions = true
     end
+
+    -- Constantly update the option prefix
     if Moan.showingOptions then
-      -- Constantly update the option prefix
+      -- Remove the indicators from other selections
       for i=1, #allMessages[Moan.currentMsgInstance].options do
-        -- Remove the indicators from other selections
         allMessages[Moan.currentMsgInstance].options[i][1] = string.gsub(allMessages[Moan.currentMsgInstance].options[i][1], Moan.optionCharacter.." " , "")
       end
+
       -- Add an indicator to the current selection
       if allMessages[Moan.currentMsgInstance].options[Moan.currentOption][1] ~= "" then
         allMessages[Moan.currentMsgInstance].options[Moan.currentOption][1] = Moan.optionCharacter.." ".. allMessages[Moan.currentMsgInstance].options[Moan.currentOption][1]
@@ -144,35 +137,31 @@ function Moan.update(dt)
     end
 
     -- Detect a 'pause' by checking the content of the last two characters in the printedText
-    if string.sub(Moan.currentMessage, string.len(printedText)+1, string.len(printedText)+2) == "--" then
-      Moan.paused = true
-      else Moan.paused = false
-    end
+    Moan.paused = (string.sub(Moan.currentMessage, string.len(printedText)+1, string.len(printedText)+2) == "--")
 
     --https://www.reddit.com/r/love2d/comments/4185xi/quick_question_typing_effect/
     if typePosition <= string.len(Moan.currentMessage) then
-
-        -- Only decrease the timer when not paused
-        if not Moan.paused then
-          typeTimer = typeTimer - dt
+      -- Only decrease the timer when not paused
+      if not Moan.paused then
+        typeTimer = typeTimer - dt
       end
 
-        -- Timer done, we need to print a new letter:
-        -- Adjust position, use string.sub to get sub-string
-        if typeTimer <= 0 then
-          -- Only make the keypress sound if the next character is a letter
-              if string.sub(Moan.currentMessage, typePosition, typePosition) ~= " " and typing then
-            Moan.playSound(Moan.typeSound)
-              end
-            typeTimer = typeTimerMax
-            typePosition = typePosition + 1
+      -- Timer done, we need to print a new letter:
+      -- Adjust position, use string.sub to get sub-string
+      if typeTimer <= 0 then
+        -- Only make the keypress sound if the next character is a letter
+        if string.sub(Moan.currentMessage, typePosition, typePosition) ~= " " and typing then
+          Moan.playSound(Moan.typeSound)
+        end
+        typeTimer = typeTimerMax
+        typePosition = typePosition + 1
 
-            -- UTF8 support, thanks @FluffySifilis
+        -- UTF8 support, thanks @FluffySifilis
         local byteoffset = utf8.offset(Moan.currentMessage, typePosition)
         if byteoffset then
           printedText = string.sub(Moan.currentMessage, 0, byteoffset - 1)
         end
-        end
+      end
     end
   end
 end
@@ -227,8 +216,7 @@ function Moan.draw()
   -- This section is mostly unfinished...
   -- Lots of magic numbers and generally takes a lot of
   -- trial and error to look right, beware.
-
-  love.graphics.setDefaultFilter( "nearest", "nearest")
+  love.graphics.setDefaultFilter("nearest", "nearest")
   if Moan.showingMessage then
     local scale = 0.26
     local padding = 10
@@ -311,11 +299,6 @@ function Moan.draw()
   Moan.drawDebug()
 end
 
-function Moan.keypressed(key)
-  -- Lazily handle the keypress
-  Moan.keyreleased(key)
-end
-
 function Moan.keyreleased(key)
   if Moan.showingOptions then
     if key == Moan.selectButton and not typing then
@@ -390,14 +373,10 @@ function Moan.moveCamera()
   -- Only move the camera if one exists
   if Moan.currentCamera ~= nil then
     -- Move the camera to the new instances position
-    if (allMessages[Moan.currentMsgInstance].x and allMessages[Moan.currentMsgInstance].y) ~= nil then
-      flux.to(Moan.currentCamera, 1, { x = allMessages[Moan.currentMsgInstance].x, y = allMessages[Moan.currentMsgInstance].y }):ease("cubicout")
+    local msg = allMessages[Moan.currentMsgInstance]
+    if (msg.x and msg.y) ~= nil then
+      Moan.currentCamera:lookAt(msg.x, msg.y)
     end
-  end
-end
-
-function Moan.setTheme(style)
-  for _, setting in pairs(Moan.UI) do
   end
 end
 
@@ -408,7 +387,7 @@ function Moan.playSound(sound)
 end
 
 function Moan.clearMessages()
-  Moan.showingMessage = false -- Prevents crashing
+  Moan.showingMessage = false
   Moan.currentMsgKey = 1
   Moan.currentMsgInstance = 1
   allMessages = {}
@@ -431,7 +410,6 @@ function Moan.drawDebug()
       "typeSpeed", Moan.typeSpeed,
       "typeSound", type(Moan.typeSound) .. " " .. tostring(Moan.typeSound),
       "allMessages.len", #allMessages,
-      --"titleColor", unpack(allMessages[Moan.currentMsgInstance].titleColor)
     }
     for i=1, #log, 2 do
       love.graphics.print(tostring(log[i]) .. ":  " .. tostring(log[i+1]), 10, 7*i)
@@ -442,72 +420,55 @@ end
 -- External UTF8 functions
 -- https://github.com/alexander-yakushev/awesompd/blob/master/utf8.lua
 function utf8.charbytes (s, i)
-   -- argument defaults
-   i = i or 1
-   local c = string.byte(s, i)
-
-   -- determine bytes needed for character, based on RFC 3629
-   if c > 0 and c <= 127 then
-      -- UTF8-1
-      return 1
-   elseif c >= 194 and c <= 223 then
-      -- UTF8-2
-      local c2 = string.byte(s, i + 1)
-      return 2
-   elseif c >= 224 and c <= 239 then
-      -- UTF8-3
-      local c2 = s:byte(i + 1)
-      local c3 = s:byte(i + 2)
-      return 3
-   elseif c >= 240 and c <= 244 then
-      -- UTF8-4
-      local c2 = s:byte(i + 1)
-      local c3 = s:byte(i + 2)
-      local c4 = s:byte(i + 3)
-      return 4
-   end
+  -- argument defaults
+  i = i or 1
+  local c = string.byte(s, i)
+  -- determine bytes needed for character, based on RFC 3629
+  if c > 0 and c <= 127 then -- UTF8-1
+    return 1
+  elseif c >= 194 and c <= 223 then -- UTF8-2
+    local c2 = string.byte(s, i + 1)
+    return 2
+  elseif c >= 224 and c <= 239 then -- UTF8-3
+    local c2 = s:byte(i + 1)
+    local c3 = s:byte(i + 2)
+    return 3
+  elseif c >= 240 and c <= 244 then -- UTF8-4
+    local c2 = s:byte(i + 1)
+    local c3 = s:byte(i + 2)
+    local c4 = s:byte(i + 3)
+    return 4
+  end
 end
 
 function utf8.sub (s, i, j)
-   j = j or -1
+  if i == nil then return "" end
+  j = j or -1
 
-   if i == nil then
-      return ""
-   end
+  local pos = 1
+  local bytes = string.len(s)
+  local len = 0
 
-   local pos = 1
-   local bytes = string.len(s)
-   local len = 0
+  -- only set l if i or j is negative
+  local l = (i >= 0 and j >= 0) or utf8.len(s)
+  local startChar = (i >= 0) and i or l + i + 1
+  local endChar = (j >= 0) and j or l + j + 1
 
-   -- only set l if i or j is negative
-   local l = (i >= 0 and j >= 0) or utf8.len(s)
-   local startChar = (i >= 0) and i or l + i + 1
-   local endChar = (j >= 0) and j or l + j + 1
+  -- can't have start before end!
+  if startChar > endChar then return "" end
 
-   -- can't have start before end!
-   if startChar > endChar then
-      return ""
-   end
-
-   -- byte offsets to pass to string.sub
-   local startByte, endByte = 1, bytes
-
-   while pos <= bytes do
-      len = len + 1
-
-      if len == startChar then
-   startByte = pos
-      end
-
-      pos = pos + utf8.charbytes(s, pos)
-
-      if len == endChar then
-   endByte = pos - 1
-   break
-      end
-   end
-
-   return string.sub(s, startByte, endByte)
+  -- byte offsets to pass to string.sub
+  local startByte, endByte = 1, bytes
+  while pos <= bytes do
+    len = len + 1
+    if len == startChar then startByte = pos end
+    pos = pos + utf8.charbytes(s, pos)
+    if len == endChar then
+      endByte = pos - 1
+      break
+    end
+  end
+  return string.sub(s, startByte, endByte)
 end
 
 -- ripped from https://github.com/rxi/lume
@@ -541,3 +502,5 @@ function Moan.wordwrap(str, limit)
   table.insert(rtn, line)
   return table.concat(rtn)
 end
+
+return Moan

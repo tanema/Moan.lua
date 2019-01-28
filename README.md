@@ -28,11 +28,11 @@ Moan.new("Title", {"Hello world!", "It's me;--Möan.lua!"})
 
 ## How to
 * Download the `Moan/` folder in this repo
-* Include it via adding, `require('Moan/Moan')`, to the top of your `main.lua`
+* Include it via adding, `local Moan = require('Moan/Moan')`, to the top of your `main.lua`
 * Add the following to your main.lua
 
 ```lua
-require('Moan')
+local Moan = require('Moan')
 
 function love.load()
   Moan.new("Title", {"Hello World!"})
@@ -102,15 +102,12 @@ A double dash, `--`, causes Moan.lua to stop typing, and will only continue when
 ### Moan.setCamera()
 Sets the HUMP camera for Moan to use.
 
-Depends on [flux.lua](https://github.com/rxi/flux) and [HUMP camera](https://github.com/vrld/hump).
-
 ```lua
 Moan.setCamera(HUMPcameraToUse)
 ```
 
 ```lua
 Camera = require("libs/hump/camera")
-flux = require("libs/flux")
 
 function love.load()
   camera = Camera(0,0)
@@ -121,7 +118,6 @@ function love.load()
 end
 
 function love.update(dt)
-  flux.update(dt)
   Moan.update(dt
 end
 
